@@ -1,0 +1,155 @@
+---
+- include_vars: vault.yml
+
+- name: Remove Apache to prep for nginx
+  package: name="apache2" state=absent
+
+- name: Install Friendica dependencies
+  package: name="{{ item }}" state=present
+  with_items:
+    - nginx
+    - php
+    - php-fpm
+    - php-xml
+    - php-curl
+    - php-gd
+    - php-imagick
+    - php-mysql
+    - php-mbstring
+    - php-zip
+    - mariadb-server
+    - python-pymysql
+    - exim4
+    - git
+    - certbot
+
+- name: Clone Friendica git
+  git:
+    repo: https://github.com/friendica/friendica.git
+    dest: /var/www/friendica
+    depth: 1
+    version: 2018.09
+
+- name: Clone Friendica addons
+  git:
+    repo: https://github.com/friendica/friendica-addons.git
+    dest: /var/www/friendica/addon
+    depth: 1
+    version: master
+
+- name: Create DB
+  mysql_db:
+    name: "{{ friendica.db_name }}"
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Create DB user
+  mysql_user:
+    name: "{{ friendica.db_name }}"
+    password: "{{ friendica.db_password }}"
+    priv: "friendica.*:ALL"
+    login_user: "root"
+    login_password: "{{ mysql_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Create composer work dir
+  file:
+    path: /var/www/.composer
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0770
+
+- name: Create vendor dir
+  file:
+    path: /var/www/friendica/vendor
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0770
+
+- name: Create view/smarty3 dir
+  file:
+    path: /var/www/friendica/view/smarty3
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0775
+
+- name: Create asset dir
+  file:
+    path: /var/www/friendica/view/asset
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0775
+
+- name: Import dependencies
+  become_user: www-data
+  become: true
+  command: php bin/composer.phar install
+  args:
+    chdir: /var/www/friendica
+
+- name: Ensure config can be written
+  file:
+    path: /var/www/friendica/config
+    owner: www-data
+    group: www-data
+    mode: 0770
+    recurse: yes
+
+- name: Enable background worker
+  cron:
+    name: 'Check public postings'
+    minute: '*/10'
+    job: 'cd /var/www/friendica; /usr/bin/php bin/worker.php'
+
+- name: Install php-fpm pool config
+  template:
+    src: php-fpm.conf.j2
+    dest: /etc/php/7.0/fpm/pool.d/friendica.conf
+
+- name: Restart php-fpm
+  service:
+    name: php7.0-fpm
+    state: restarted
+
+- name: Install secure ssl snippet
+  template:
+    src: ssl.conf.j2
+    dest: /etc/nginx/snippets/ssl.conf
+
+- name: Install nginx config
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/sites-available/friendica.conf
+
+- name: Enable nginx config
+  file:
+    src: /etc/nginx/sites-available/friendica.conf
+    dest: /etc/nginx/sites-enabled/friendica.conf
+    state: link
+
+- name: Disable default nginx config
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Stop nginx to get ssl cert
+  service:
+    name: nginx
+    state: stopped
+
+- name: Get LetsEncrypt cert
+  command: certbot certonly -n --standalone -d "{{ friendica.hostname }}" --agree-tos --email "david@pflug.email"
+  args:
+    creates: /etc/letsencrypt/live/"{{ friendica.hostname }}"/fullchain.pem
+
+- name: Start nginx
+  service:
+    name: nginx
+    state: started
+
+...

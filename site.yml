@@ -1,0 +1,9 @@
+---
+
+- name: Config all nodes with all roles
+  hosts: all
+  roles:
+    - common
+    - friendica
+
+...

@@ -1,0 +1,11 @@
+---
+
+friendica:
+  hostname: "friendica.pflug.email"
+  db_user: "rpg_friendica"
+  db_password: "{{ vault_friendica.db_password }}"
+  db_name: "rpg_friendica"
+
+mysql_password: "{{ vault_mysql_password }}"
+
+...
