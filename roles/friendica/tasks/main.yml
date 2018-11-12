@@ -19,7 +19,7 @@
     - php-zip
     - mariadb-server
     - python-pymysql
-    - exim4
+    - postfix
     - git
     - certbot
 
@@ -48,7 +48,7 @@
   mysql_user:
     name: "{{ friendica.db_name }}"
     password: "{{ friendica.db_password }}"
-    priv: "friendica.*:ALL"
+    priv: "{{ friendica.db_name }}.*:ALL"
     login_user: "root"
     login_password: "{{ mysql_password }}"
     login_unix_socket: /var/run/mysqld/mysqld.sock

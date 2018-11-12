@@ -33,46 +33,72 @@ server {
   ssl_certificate_key /etc/letsencrypt/live/{{ friendica.hostname }}/privkey.pem;
 
   include /etc/nginx/snippets/ssl.conf;
+  
+  # Make sure files with the following extensions do not get loaded by nginx because nginx would display the source code, and these files can contain PASSWORDS!
+  location ~* \.(engine|inc|info|install|make|module|profile|test|po|sh|.*sql|theme|tpl(\.php)?|xtmpl)$|^(\..*|Entries.*|Repository|Root|Tag|Template)$|\.php_ {
+    return 444;
+  }
+
+  # Deny all attempts to access hidden files such as .htaccess, .htpasswd, .DS_Store (Mac).
+  location ~ /\. {
+    return 444;
+	access_log off;
+	log_not_found off;
+  }
 
   location / {
     index index.php;
-    try_files $uri $uri/ =404;
-  }
-
-  location /fd/ {
-    index index.php;
     if (!-f $request_filename) {
-      rewrite ^/fd/(.+)$ /fd/index.php?q=$1 last;
+      rewrite ^/(.+)$ /index.php?q=$1 last;
     }
+    expires 30d;
     try_files $uri $uri/ =404;
   }
 
   location ~ \.php$ {
+    fastcgi_split_path_info ^(.+\.php)(.+)$;
+    fastcgi_buffer_size 128k;
+    fastcgi_buffers 256 16k;
+    fastcgi_busy_buffers_size 256k;
+    fastcgi_temp_file_write_size 256k;
     include fastcgi.conf;
-    fastcgi_split_path_info ^(.+\.php)(.*)$;
     fastcgi_index index.php;
     fastcgi_pass unix:/var/run/php/php7.0-fpm-friendica.sock;
+    fastcgi_read_timeout 150;
     try_files $uri $uri/ =404;
   }
 
-  location ~ \..*/.*\.php$ {
-    return 403;
-  }
-
-  location ~* \.(?:ico|css|js|gif|jpe?g|png)$ {
+  location ~* \.(?:jpe?g|png|gif|css|js|ico)$ {
     # cache static assets
     expires max;
     add_header Pragma public;
     add_header Cache-Control "public, must-revalidate, proxy-revalidate";
   }
 
-  location /robots.txt {
+  location ~ /.well-known {
     allow all;
+  }
+
+  # Security and optimization
+  location ~ \..*/.*\.php$ {
+    return 403;
+  }
+
+  location /favicon.ico {
+    expires max;
+    log_not_found off;
+    access_log off;
+    return 204;
+  }
+
+  location /robots.txt {
     log_not_found off;
     access_log off;
   }
 
-  location ~ /.well-known {
-    allow all;
+  location /.git {
+    return 444;
+    access_log off;
+    log_not_found off;
   }
 }
