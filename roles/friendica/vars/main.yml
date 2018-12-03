@@ -1,7 +1,7 @@
 ---
 
 friendica:
-  hostname: "friendica.pflug.email"
+  hostname: "rpgtable.top"
   db_user: "rpg_friendica"
   db_password: "{{ vault_friendica.db_password }}"
   db_name: "rpg_friendica"
